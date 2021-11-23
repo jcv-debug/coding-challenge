@@ -57,72 +57,81 @@ class Block {
 	/**
 	 * Renders the block.
 	 *
-	 * @param array    $attributes The attributes for the block.
-	 * @param string   $content    The block content, if any.
-	 * @param WP_Block $block      The instance of this block.
+	 * @param array $attributes The attributes for the block.
 	 * @return string The markup of the block.
 	 */
-	public function render_callback( $attributes, $content, $block ) {
-		$post_types = get_post_types(  [ 'public' => true ] );
-		$class_name = $attributes['className'];
+	public function render_callback( $attributes ) {
+		$post_types = get_post_types( [ 'public' => true ] );
 		ob_start();
-
 		?>
-        <div class="<?php echo $class_name; ?>">
-			<h2>Post Counts</h2>
+		<div<?php echo isset( $attributes['className'] ) ? ' class="' . $attributes['className'] . '"' : ''; ?>>
+			<h2><?php echo __( 'Post Counts', 'site-counts' ); ?></h2>
 			<ul>
-			<?php
-			foreach ( $post_types as $post_type_slug ) :
-                $post_type_object = get_post_type_object( $post_type_slug  );
-                $post_count = count(
-                    get_posts(
-						[
-							'post_type' => $post_type_slug,
-							'posts_per_page' => -1,
-						]
-					)
-                );
-
-				?>
-				<li><?php echo 'There are ' . $post_count . ' ' .
-					  $post_type_object->labels->name . '.'; ?></li>
-			<?php endforeach;	?>
-			</ul><p><?php echo 'The current post ID is ' . $_GET['post_id'] . '.'; ?></p>
-
-			<?php
-			$query = new WP_Query(  array(
-				'post_type' => ['post', 'page'],
-				'post_status' => 'any',
-				'date_query' => array(
-					array(
-						'hour'      => 9,
-						'compare'   => '>=',
-					),
-					array(
-						'hour' => 17,
-						'compare'=> '<=',
-					),
-				),
-                'tag'  => 'foo',
-                'category_name'  => 'baz',
-				  'post__not_in' => [ get_the_ID() ],
-			));
-
-			if ( $query->found_posts ) :
-				?>
-				 <h2>5 posts with the tag of foo and the category of baz</h2>
-                <ul>
-                <?php
-
-                 foreach ( array_slice( $query->posts, 0, 5 ) as $post ) :
-                    ?><li><?php echo $post->post_title ?></li><?php
-				endforeach;
-			endif;
-		 	?>
+				<?php
+				foreach ( $post_types as $post_type_slug ) :
+					$post_type_object = get_post_type_object( $post_type_slug );
+					$post_stats       = wp_count_posts( $post_type_slug );
+					?>
+					<li>
+						<?php
+						// translators: %1$d is replaced with number of posts per type.
+						// translators: %2$s is replaced with posts type label.
+						echo sprintf( _n( 'There is %1$d %2$s.', 'There are %1$d %2$s.', $post_stats->publish, 'site-counts' ), $post_stats->publish, $post_type_object->labels->{( $post_stats->publish > 1 ? 'name' : 'singular_name' )} );
+						?>
+					</li>
+				<?php endforeach; ?>
 			</ul>
+			<p>
+				<?php
+				// translators: %d is replaced with Post ID.
+				echo sprintf( __( 'The current post ID is %d.', 'site-counts' ), get_the_ID() );
+				?>
+			</p>
+			<?php
+			$query      = new WP_Query(
+				[
+					'fields'         => [ 'ID', 'post_title' ],
+					'post_type'      => [ 'post', 'page' ],
+					'post_status'    => 'any',
+					'date_query'     => [
+						[
+							'hour'    => 9,
+							'compare' => '>=',
+						],
+						[
+							'hour'    => 17,
+							'compare' => '<=',
+						],
+					],
+					'tag'            => 'foo',
+					'category_name'  => 'baz',
+					'posts_per_page' => 5,
+					'no_found_rows'  => true,
+				],
+			);
+			$posts      = [];
+			$post_count = 0;
+			foreach ( $query->posts as $post ) {
+				if ( get_the_ID() === $post->post_id ) {
+					continue;
+				}
+				$posts[] = $post;
+				$post_count++;
+			}
+			if ( $post_count ) :
+				?>
+			<h2>
+				<?php
+				// translators: %d is replaced with query post counts.
+				echo sprintf( _n( '%d post with the tag of foo and the category of baz', '%d posts with the tag of foo and the category of baz', $post_count, 'site-counts' ), $post_count );
+				?>
+				<ul>
+					<?php foreach ( $posts as $post ) : ?>
+						<li><?php echo $post->post_title; ?></li>
+					<?php endforeach; ?>
+					<?php endif; ?>
 		</div>
 		<?php
-
 		return ob_get_clean();
 	}
 }
